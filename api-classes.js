@@ -55,11 +55,29 @@ class StoryList {
         url: newStory.url,
       },
     });
-
     // this function should return the newly created story so it can be used in
     return new Story(response.data.story);
 
     // the script.js file where it will be appended to the DOM
+  }
+
+  /**
+   * Method to make a DELETE request to /stories/storyId
+   * - user - the current instance of User who will post the story
+   * - storyId - the story id that will be deleted
+   */
+  async deleteStory(user, storyId) {
+    if (!user.loginToken) return null;
+    try {
+      const response = await axios.delete(`${BASE_URL}/stories/${storyId}`, {
+        data: {
+          token: user.loginToken,
+        },
+      });
+      return response;
+    } catch (err) {
+      console.error(err);
+    }
   }
 }
 
@@ -184,7 +202,7 @@ class User {
         token: this.loginToken,
       }
     );
-
+    await this.getFavorites();
     return response.data.message;
   }
 
@@ -202,8 +220,30 @@ class User {
         },
       }
     );
-
+    await this.getFavorites();
     return response.data.message;
+  }
+
+  /**
+   * Method to get/refresh user favorites
+   */
+  async getFavorites() {
+    const response = await axios.get(`${BASE_URL}/users/${this.username}`, {
+      params: {
+        token: this.loginToken,
+      },
+    });
+
+    this.favorites = response.data.user.favorites.map((s) => new Story(s));
+  }
+
+  async getOwnStories() {
+    const response = await axios.get(`${BASE_URL}/users/${this.username}`, {
+      params: {
+        token: this.loginToken,
+      },
+    });
+    this.ownStories = response.data.user.stories.map((s) => new Story(s));
   }
 }
 

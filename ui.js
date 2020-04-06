@@ -10,7 +10,9 @@ $(async function () {
   const $navLogin = $('#nav-login');
   const $navLogOut = $('#nav-logout');
   const $navWelcome = $('#nav-welcome');
-  const $favorite = $('.star');
+  const $userProfile = $('#user-profile');
+  const $favoriteArticles = $('#favorited-articles');
+  const $userStories = $('#my-articles');
 
   // global storyList variable
   let storyList = null;
@@ -36,6 +38,7 @@ $(async function () {
     const userInstance = await User.login(username, password);
     // set the global user to the user instance
     currentUser = userInstance;
+
     syncCurrentUserToLocalStorage();
     loginAndSubmitForm();
   });
@@ -90,6 +93,7 @@ $(async function () {
     hideElements();
     await generateStories();
     $allStoriesList.show();
+    addUSerFavorites();
   });
 
   /**
@@ -98,6 +102,69 @@ $(async function () {
   $('#nav-user-profile').on('click', function () {
     hideElements();
     $('#user-profile').show();
+  });
+
+  /**
+   * Event handler for favorites clicked
+   */
+  $('#nav-favorites').on('click', function () {
+    if (!currentUser) return;
+    hideElements();
+    $favoriteArticles.empty();
+    $allStoriesList.empty();
+
+    const userFavorites = allStoryMaker(currentUser.favorites);
+
+    if (!Array.isArray(userFavorites) || userFavorites.length === 0) {
+      $favoriteArticles.append(
+        "<strong>You don't have any Favorites yet!</strong>"
+      );
+    }
+
+    $favoriteArticles.append(userFavorites);
+    $favoriteArticles.show();
+    addUSerFavorites();
+  });
+
+  $('#nav-my-stories').on('click', createMyStories);
+
+  /**Creates the my stories article section */
+  async function createMyStories() {
+    if (!currentUser) return;
+
+    hideElements();
+
+    $favoriteArticles.empty();
+    $allStoriesList.empty();
+    $userStories.empty();
+
+    await currentUser.getOwnStories();
+
+    const userStories = allStoryMaker(currentUser.ownStories);
+
+    if (!Array.isArray(userStories) || userStories.length === 0) {
+      $userStories.append("<strong>You don't have any stories yet!</strong>");
+    }
+
+    $userStories.append(userStories);
+
+    $userStories.show();
+    addUSerFavorites();
+    appendTrashIcon(currentUser.ownStories);
+  }
+
+  /*Function that generate a list of stories markup when passed in a list of stories */
+  function allStoryMaker(storyList) {
+    const results = [];
+    for (let story of storyList) {
+      results.push(generateStoryHTML(story));
+    }
+    return results;
+  }
+
+  /* Function that fills out user profile section*/
+  function fillUserProfile() {
+    if (!currentUser) return null;
 
     $('#user-profile section')
       .children('#profile-name')
@@ -112,12 +179,15 @@ $(async function () {
     $('#user-profile section')
       .children('#profile-account-date')
       .append(' ' + date);
-  });
+  }
 
   /**
    * Event listener for clicking favorite icon
    */
   $allStoriesList.on('click', '.star', handleFavoriteClick);
+  $favoriteArticles.on('click', '.star', handleFavoriteClick);
+  $userStories.on('click', '.star', handleFavoriteClick);
+  $userStories.on('click', '.trash-can', handleRemoveStory);
 
   /**
    * Event handler for clicking submit navigation button
@@ -149,6 +219,8 @@ $(async function () {
 
     if (currentUser) {
       showNavForLoggedInUser();
+      fillUserProfile();
+      addUSerFavorites();
     }
   }
 
@@ -165,11 +237,15 @@ $(async function () {
     $loginForm.trigger('reset');
     $createAccountForm.trigger('reset');
 
+    generateStories();
+
     // show the stories
     $allStoriesList.show();
 
     // update the navigation bar
     showNavForLoggedInUser();
+    addUSerFavorites();
+    fillUserProfile();
   }
 
   /**
@@ -190,6 +266,7 @@ $(async function () {
       const result = generateStoryHTML(story);
       $allStoriesList.append(result);
     }
+    addUSerFavorites();
   }
 
   /**
@@ -198,11 +275,17 @@ $(async function () {
 
   function generateStoryHTML(story) {
     let hostName = getHostName(story.url);
+    let favoriteSpan = '<span></span>';
+
+    if (currentUser) {
+      favoriteSpan =
+        '<span class="star"><i class="far fa-star star"></i></span>';
+    }
 
     // render story markup
     const storyMarkup = $(`
       <li id="${story.storyId}">
-      <span class="far fa-star star"></span>
+      ${favoriteSpan}
         <a class="article-link" href="${story.url}" target="a_blank">
           <strong>${story.title}</strong>
         </a>
@@ -225,6 +308,9 @@ $(async function () {
       $ownStories,
       $loginForm,
       $createAccountForm,
+      $userProfile,
+      $favoriteArticles,
+      $userStories,
     ];
     elementsArr.forEach(($elem) => $elem.hide());
   }
@@ -243,6 +329,37 @@ $(async function () {
   }
 
   /**
+   * Add favorite icon to user's favorite stories
+   */
+  function addUSerFavorites() {
+    if (!currentUser) return;
+
+    for (let favorite of currentUser.favorites) {
+      $(`#${favorite.storyId}`)
+        .children('span')
+        .children('i')
+        .removeClass('far fa-star')
+        .addClass('fas fa-star');
+    }
+  }
+
+  /*Add trash can icon to each user story */
+  function appendTrashIcon(userStories) {
+    for (let userStory of userStories) {
+      $(`#${userStory.storyId}`).prepend(
+        '<span class="trash-can"><i class="fas fa-trash-alt"></i></span>'
+      );
+    }
+  }
+
+  /*Removes a user story*/
+  async function handleRemoveStory(evt) {
+    const storyId = evt.target.parentNode.parentNode.id;
+    await storyList.deleteStory(currentUser, storyId);
+    createMyStories();
+  }
+
+  /**
    * Event handler for when the article form is submitted
    */
   async function handleFormSubmit(evt) {
@@ -251,6 +368,10 @@ $(async function () {
     const author = $('#author').val();
     const title = $('#title').val();
     const url = $('#url').val();
+
+    $('#author').val('');
+    $('#title').val('');
+    $('#url').val('');
 
     //getting a new story object
     const newStory = await storyList.addStory(currentUser, {
@@ -261,6 +382,14 @@ $(async function () {
 
     //generating the html markup for a story and adding it to the story list
     $allStoriesList.prepend(generateStoryHTML(newStory));
+    $userStories.prepend(
+      generateStoryHTML(newStory).prepend(
+        '<span class="trash-can"><i class="fas fa-trash-alt"></i></span>'
+      )
+    );
+    if ($userStories.children('strong')) {
+      $userStories.children('strong').remove();
+    }
     $submitForm.slideToggle();
   }
 
@@ -268,7 +397,7 @@ $(async function () {
    * Event handler for adding favorite article
    */
   async function handleFavoriteClick(evt) {
-    const storyId = evt.target.parentNode.id;
+    const storyId = evt.target.parentNode.parentNode.id;
     let message = '';
     if ($(evt.target).hasClass('favorite')) {
       message = await currentUser.deleteFavoriteStory(storyId);
