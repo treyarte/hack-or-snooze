@@ -278,8 +278,7 @@ $(async function () {
     let favoriteSpan = '<span></span>';
 
     if (currentUser) {
-      favoriteSpan =
-        '<span class="star"><i class="far fa-star star"></i></span>';
+      favoriteSpan = '<span class="star"><i class="far fa-star"></i></span>';
     }
 
     // render story markup
@@ -339,7 +338,8 @@ $(async function () {
         .children('span')
         .children('i')
         .removeClass('far fa-star')
-        .addClass('fas fa-star');
+        .addClass('fas fa-star')
+        .addClass('favorite');
     }
   }
 
@@ -397,7 +397,7 @@ $(async function () {
    * Event handler for adding favorite article
    */
   async function handleFavoriteClick(evt) {
-    const storyId = evt.target.parentNode.parentNode.id;
+    const storyId = $(evt.target).parents('li').attr('id');
     let message = '';
     if ($(evt.target).hasClass('favorite')) {
       message = await currentUser.deleteFavoriteStory(storyId);
